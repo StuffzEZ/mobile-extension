@@ -151,8 +151,10 @@ app.get('/proxy', async (req, res) => {
     }
 });
 
-app.use('/view/:sessionId/:targetUrl(.*)', (req, res, next) => {
-    const { sessionId, targetUrl } = req.params;
+app.use('/view/:sessionId', (req, res, next) => {
+    const { sessionId } = req.params;
+    // In Express 5, the remaining path is available in req.url after the matched prefix
+    const targetUrl = req.url.startsWith('/') ? req.url.substring(1) : req.url;
     const session = sessions.get(sessionId);
     if (!session) return res.status(404).send('Session expired or not found');
 
@@ -162,8 +164,10 @@ app.use('/view/:sessionId/:targetUrl(.*)', (req, res, next) => {
         target: target.origin,
         changeOrigin: true,
         pathRewrite: (path, req) => {
-            // Remove the /view/:sessionId/:targetUrl prefix
-            return path.replace(`/view/${sessionId}/${targetUrl}`, '') || '/';
+            // In the new route /view/:sessionId, the path will look like /view/123/https://example.com/page
+            // We need to strip /view/:sessionId/https://example.com/ to get the target path
+            const prefix = `/view/${sessionId}/${targetUrl}`;
+            return path.replace(prefix, '') || '/';
         },
         selfHandleResponse: true,
         onProxyRes: async (proxyRes, req, res) => {
