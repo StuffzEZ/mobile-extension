@@ -151,9 +151,8 @@ app.get('/proxy', async (req, res) => {
     }
 });
 
-app.use('/view/:sessionId/*', (req, res, next) => {
-    const { sessionId } = req.params;
-    const targetUrl = req.params[0];
+app.use('/view/:sessionId/:targetUrl(.*)', (req, res, next) => {
+    const { sessionId, targetUrl } = req.params;
     const session = sessions.get(sessionId);
     if (!session) return res.status(404).send('Session expired or not found');
 
@@ -162,8 +161,9 @@ app.use('/view/:sessionId/*', (req, res, next) => {
     return createProxyMiddleware({
         target: target.origin,
         changeOrigin: true,
-        pathRewrite: {
-            [`^/view/${sessionId}/${targetUrl}`]: '',
+        pathRewrite: (path, req) => {
+            // Remove the /view/:sessionId/:targetUrl prefix
+            return path.replace(`/view/${sessionId}/${targetUrl}`, '') || '/';
         },
         selfHandleResponse: true,
         onProxyRes: async (proxyRes, req, res) => {
@@ -178,19 +178,20 @@ app.use('/view/:sessionId/*', (req, res, next) => {
                     const $ = cheerio.load(html);
 
                     // Inject content scripts
-                    session.contentScripts.forEach(script => {
-                        // Check matches (simplified)
-                        if (script.js) {
-                            script.js.forEach(jsFile => {
-                                $('head').append(`<script src="/_extension_assets/${sessionId}/${jsFile}"></script>`);
-                            });
-                        }
-                        if (script.css) {
-                            script.css.forEach(cssFile => {
-                                $('head').append(`<link rel="stylesheet" href="/_extension_assets/${sessionId}/${cssFile}">`);
-                            });
-                        }
-                    });
+                    if (session.contentScripts) {
+                        session.contentScripts.forEach(script => {
+                            if (script.js) {
+                                script.js.forEach(jsFile => {
+                                    $('head').append(`<script src="/_extension_assets/${sessionId}/${jsFile}"></script>`);
+                                });
+                            }
+                            if (script.css) {
+                                script.css.forEach(cssFile => {
+                                    $('head').append(`<link rel="stylesheet" href="/_extension_assets/${sessionId}/${cssFile}">`);
+                                });
+                            }
+                        });
+                    }
 
                     // Add a small helper to mock some chrome APIs and handle navigation
                     $('head').prepend(`
@@ -207,12 +208,14 @@ app.use('/view/:sessionId/*', (req, res, next) => {
                             // Intercept navigation to stay within proxy
                             document.addEventListener('click', (e) => {
                                 const link = e.target.closest('a');
-                                if (link && link.href && link.href.startsWith(window.location.origin)) {
-                                    // Already local or absolute to same origin
-                                } else if (link && link.href) {
+                                if (link && link.href) {
+                                    const linkUrl = new URL(link.href);
+                                    if (linkUrl.origin === window.location.origin) {
+                                        // Already on our proxy origin
+                                        return;
+                                    }
                                     e.preventDefault();
-                                    const targetUrl = new URL(link.href);
-                                    window.location.href = "/view/${sessionId}/" + targetUrl.href;
+                                    window.location.href = "/view/${sessionId}/" + linkUrl.href;
                                 }
                             });
 
