@@ -151,7 +151,7 @@ app.get('/proxy', async (req, res) => {
     }
 });
 
-app.use('/view/:sessionId/:targetUrl(*)', (req, res, next) => {
+app.use('/view/:sessionId/:targetUrl*', (req, res, next) => {
     const { sessionId, targetUrl } = req.params;
     const session = sessions.get(sessionId);
     if (!session) return res.status(404).send('Session expired or not found');
