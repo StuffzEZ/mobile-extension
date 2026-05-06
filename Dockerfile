@@ -1,21 +1,33 @@
-# Use a lightweight Node.js image
+# Use Node.js 20 slim image
 FROM node:20-slim
 
-# Set up work directory
+# Set working directory
 WORKDIR /app
 
-# Install necessary system dependencies for some npm packages if needed
-# (adm-zip and others are mostly JS, so slim should be fine)
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy package.json and install dependencies
+# Copy package files
 COPY package*.json ./
-RUN npm install --production
 
-# Copy the rest of the application
-COPY . .
+# Install Node.js dependencies
+RUN npm ci --only=production
+
+# Copy application code
+COPY server.js ./
+
+# Create cache directory
+RUN mkdir -p extension_cache
 
 # Expose port 3000
 EXPOSE 3000
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3000/', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
+
 # Start the application
-CMD ["npm", "start"]
+CMD ["node", "server.js"]
