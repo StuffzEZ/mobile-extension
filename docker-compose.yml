@@ -3,8 +3,8 @@ version: '3.8'
 services:
   mobile-extension-proxy:
     build: .
-    image: mobile-extension-proxy:latest
-    container_name: mobile-extension-proxy
+    image: ghcr.io/leakhw/mobile:latest
+    container_name: leakhw-mobile-extension-proxy
     ports:
       - "3000:3000"
     environment:
